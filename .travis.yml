@@ -14,12 +14,15 @@ branches:
     only:
         - dev
         - master
+stages:
+  - sheldon
+  - build_doc
+  #- deploy_doc
 compiler:
     - gcc
 before_script:
-    - git clone https://github.com/fw4spl-org/fw4spl-git.git fw4spl-git
+    - git clone --depth 1 -b travis https://github.com/fw4spl-org/fw4spl-git.git fw4spl-git
     - cd fw4spl-git
-    - git checkout travis
     - git config --global codingstyle-hook.uncrustify-path `pwd`/hooks/uncrustify
     - cd ..
     - wget -q --no-check-certificate https://cmake.org/files/v3.4/cmake-3.4.1-Linux-x86_64.tar.gz
@@ -37,14 +40,22 @@ before_script:
     - cd $TRAVIS_BUILD_DIR/build
     - $CMAKE_BIN -DCMAKE_INSTALL_PREFIX:PATH=/tmp $TRAVIS_BUILD_DIR/ -DCMAKE_BUILD_TYPE:STRING=Debug -DBUILD_DOCUMENTATION:BOOL=ON -DBUILD_TESTS:BOOL=OFF -DDOXYGEN_EXECUTABLE:FILEPATH=$DOXYGEN_BIN -DENABLE_PCH:BOOL=OFF
     - cd $TRAVIS_BUILD_DIR
-script:
-    - fw4spl-git/hooks/sheldon $TRAVIS_COMMIT_RANGE
-    - cd $TRAVIS_BUILD_DIR/build
-    - make doc
-after_success:
-    - git config --global user.name 'travis'
-    - git config --global user.email 'travis'
-    - cd $TRAVIS_BUILD_DIR/build/Documentation/Doxygen/html
-    - git add --all .
-    - git commit -m "Auto-updating Doxygen developer documentation"
-    - git push https://$GITHUB_API_KEY@github.com/fw4spl-org/fw4spl-dox.git $TRAVIS_BRANCH --quiet --force > /dev/null 2>&1
+jobs:
+  include:
+    - stage: sheldon
+      script:
+        # Fix commit range in Travis, if set.
+        # See: https://github.com/travis-ci/travis-ci/issues/4596
+        - fw4spl-git/hooks/sheldon ${TRAVIS_COMMIT_RANGE/.../..}
+    - stage: build_doc
+      script:
+        - cd $TRAVIS_BUILD_DIR/build
+        - make doc
+    - stage: deploy_doc
+      script:
+        - git config --global user.name 'travis'
+        - git config --global user.email 'travis'
+        - cd $TRAVIS_BUILD_DIR/build/Documentation/Doxygen/html
+        - git add --all .
+        - git commit -m "Auto-updating Doxygen developer documentation"
+        - git push https://$GITHUB_API_KEY@github.com/fw4spl-org/fw4spl-dox.git $TRAVIS_BRANCH --quiet --force > /dev/null 2>&1
